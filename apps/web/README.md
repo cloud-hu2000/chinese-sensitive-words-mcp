@@ -22,9 +22,9 @@ npm run dev
 
 ## 阿里云部署
 
-1. 在服务器上克隆仓库并进入 `apps/web`。
-2. 复制 `.env.example` 为 `.env`，设置强随机 `POSTGRES_PASSWORD`、`DASHSCOPE_API_KEY`，以及词库服务地址和 Token。
-3. 执行 `docker compose up -d --build`，在安全组/Nginx 中仅暴露 HTTPS 入口。
-4. `uploads` 是 Docker 私有持久卷，不应映射为静态公网目录；生产环境建议改为带生命周期策略的阿里云 OSS 私有桶。
+1. 安装 Node.js 20.9+、MySQL 8 和 Nginx；创建不具备登录权限的 `note_guard` MySQL 用户。
+2. 执行 `mysql -u root -p < db/schema.sql` 初始化数据库；复制 `.env.example` 为 `.env`，填写 MySQL URL、`DASHSCOPE_API_KEY` 和词库服务地址/Token。
+3. 执行 `npm ci && npm run build`，以 `npm run start` 或 systemd 启动服务。示例监听本机 `127.0.0.1:3000`，由 Nginx 代理 HTTPS 请求。
+4. `UPLOAD_DIR` 必须位于非公网静态目录并限制访问权限；生产环境建议改为带生命周期策略的阿里云 OSS 私有桶。
 
 `db/schema.sql` 包括账户、会话、会员额度、审核历史、风险项和私有图片元数据。实际支付需要配置支付宝或微信支付的商户号、签名密钥、异步通知 URL；会员数据模型已预留订阅提供商字段。
