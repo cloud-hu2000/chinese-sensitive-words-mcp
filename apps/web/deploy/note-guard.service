@@ -1,0 +1,20 @@
+[Unit]
+Description=Note Guard Web
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=note-guard
+Group=note-guard
+WorkingDirectory=/srv/note-guard/current
+EnvironmentFile=/etc/note-guard/note-guard.env
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=1024
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3001
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
