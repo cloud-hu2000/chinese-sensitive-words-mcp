@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import {
   hashPassword,
   hashToken,
   newSessionToken,
   sessionExpiry,
 } from "@/lib/auth";
-import { database } from "@/lib/database";
+import { database, query } from "@/lib/database";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
@@ -24,33 +25,33 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   const db = database();
-  const existing = await db.query("SELECT id FROM users WHERE email = $1", [
-    email,
-  ]);
-  if (existing.rowCount)
+  const existing = await query("SELECT id FROM users WHERE email = ?", [email]);
+  if (existing.length)
     return NextResponse.json({ error: "该邮箱已经注册。" }, { status: 409 });
-  const client = await db.connect();
+  const client = await db.getConnection();
   try {
-    await client.query("BEGIN");
-    const user = await client.query<{ id: string }>(
-      "INSERT INTO users (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id",
+    await client.beginTransaction();
+    const userId = randomUUID();
+    await client.execute(
+      "INSERT INTO users (id, email, display_name, password_hash) VALUES (?, ?, ?, ?)",
       [
+        userId,
         email,
         body.displayName?.trim().slice(0, 40) || null,
         await hashPassword(body.password),
       ],
     );
-    await client.query(
-      "INSERT INTO memberships (user_id, plan, status, monthly_quota) VALUES ($1, 'FREE', 'ACTIVE', 3)",
-      [user.rows[0].id],
+    await client.execute(
+      "INSERT INTO memberships (id, user_id, plan, status, monthly_quota) VALUES (?, ?, 'FREE', 'ACTIVE', 3)",
+      [randomUUID(), userId],
     );
     const token = newSessionToken();
     const expiresAt = sessionExpiry();
-    await client.query(
-      "INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
-      [user.rows[0].id, hashToken(token), expiresAt],
+    await client.execute(
+      "INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+      [randomUUID(), userId, hashToken(token), expiresAt],
     );
-    await client.query("COMMIT");
+    await client.commit();
     const response = NextResponse.json({ ok: true });
     response.cookies.set("note_guard_session", token, {
       httpOnly: true,
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     });
     return response;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.rollback();
     throw error;
   } finally {
     client.release();
